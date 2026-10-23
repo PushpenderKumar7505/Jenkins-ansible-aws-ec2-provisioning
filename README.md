@@ -67,6 +67,27 @@ flowchart LR
 
 ---
 
+## 🧪 How to Reproduce
+
+**Ansible server (Ubuntu EC2)**
+```bash
+sudo apt update && sudo apt install -y ansible python3-boto3 python3-botocore
+ansible-galaxy collection install amazon.aws
+```
+Attach an IAM role with EC2 permissions to this instance, so no access keys are stored on the server.
+
+**Jenkins server (Ubuntu EC2)**
+- Plugins: Git, Pipeline, GitHub, SSH Agent
+- Credential: Manage Jenkins → Credentials → Global → *SSH Username with private key*, ID `ansible`, username `ubuntu`
+- Job: Pipeline → *Pipeline script from SCM* → this repo, branch `main`, script path `Jenkinsfile`
+- Trigger: *GitHub hook trigger for GITScm polling*
+
+**GitHub**
+- Webhook: `http://<jenkins-public-ip>:8080/github-webhook/` (`application/json`, push event)
+- Port 8080 must be open in the Jenkins security group.
+
+---
+
 ## 📝 Step-by-Step Breakdown
 
 **① Jenkins Server Setup**
@@ -95,29 +116,28 @@ File: [`Jenkinsfile`](Jenkinsfile)
 
 ```groovy
 node {
-  stage('Github connect') {
-    git branch: 'main',
-        url: 'https://github.com/PushpenderKumar7505/2pm-wd-project.git'
-  }
-  stage('ansible-server') {
-    sshagent(['ansible']) {
-      sh 'ssh -o StrictHostKeyChecking=no ubuntu@<ansible-private-ip>'
-      sh 'scp /var/lib/jenkins/workspace/Aws-project/* ubuntu@<ansible-private-ip>:/home/ubuntu'
+    def ANSIBLE_HOST = 'ubuntu@<ansible-private-ip>'   // Ansible server private IP
+
+    stage('Github connect') {
+        checkout scm
     }
-  }
-  stage('ansible deploy') {
-    sshagent(['ansible']) {
-      sh 'ssh -o StrictHostKeyChecking=no ubuntu@<ansible-private-ip> cd /home/ubuntu'
-      sh 'ssh -o StrictHostKeyChecking=no ubuntu@<ansible-private-ip> ansible-playbook ec2.yml'
+    stage('ansible-server') {
+        sshagent(['ansible']) {
+            sh "scp -o StrictHostKeyChecking=no ec2.yml ${ANSIBLE_HOST}:/home/ubuntu/"
+        }
     }
-  }
+    stage('ansible deploy') {
+        sshagent(['ansible']) {
+            sh "ssh -o StrictHostKeyChecking=no ${ANSIBLE_HOST} 'cd /home/ubuntu && ansible-playbook ec2.yml'"
+        }
+    }
 }
 ```
 
 | Stage | What it does |
 |---|---|
-| `Github connect` | Checks out branch `main` into the Jenkins workspace |
-| `ansible-server` | Connects to the Ansible server with `sshagent` and copies the workspace files using `scp` |
+| `Github connect` | Checks out this repository (`checkout scm`) into the Jenkins workspace |
+| `ansible-server` | Connects to the Ansible server with `sshagent` and copies `ec2.yml` using `scp` |
 | `ansible deploy` | Runs `ansible-playbook ec2.yml` on the Ansible server over SSH |
 
 ---
@@ -156,7 +176,7 @@ File: [`ec2.yml`](ec2.yml)
 
     - name: Create an EC2 instance
       amazon.aws.ec2_instance:
-        name: "Sharma ji "
+        name: "jenkins-ansible-demo"
         image_id: "{{ ami_id }}"
         instance_type: "{{ instance_type }}"
         key_name: "{{ key_name }}"
@@ -167,6 +187,10 @@ File: [`ec2.yml`](ec2.yml)
         count: 1
         wait: yes
       register: ec2_instance
+
+    - name: Show created instance
+      ansible.builtin.debug:
+        msg: "Instance {{ ec2_instance.instances[0].instance_id }} is {{ ec2_instance.instances[0].state.name }}"
 ```
 
 **Needs on the Ansible server:** Ansible, the `amazon.aws` collection, `python3-boto3`/`botocore`, and AWS credentials with EC2 permissions.
@@ -183,9 +207,9 @@ File: [`ec2.yml`](ec2.yml)
 - The security group allows SSH (22) from `0.0.0.0/0`. Restrict it to a trusted CIDR in real use.
 - `StrictHostKeyChecking=no` skips host key verification. Use a managed `known_hosts` instead.
 - Jenkins runs on plain HTTP (port 8080).
-- Pipeline script is stored in the Jenkins job; moving it to a `Jenkinsfile` in the repo (Pipeline from SCM) is the next step.
+- Screenshots P1-11 and P1-16 show the earlier inline pipeline script; the current pipeline is the `Jenkinsfile` in this repository.
 - Playbook region is `us-west-2`, while the Jenkins and Ansible servers run in `ap-south-1`.
-- Screenshots P1-01 to P1-14 and P1-15 to P1-18 were taken on two different Jenkins servers (different IPs). Secrets visible in the original screenshots are redacted here.
+- Screenshots P1-01 to P1-14 and P1-15 to P1-18 were taken on two different Jenkins servers (different IPs).
 
 ---
 

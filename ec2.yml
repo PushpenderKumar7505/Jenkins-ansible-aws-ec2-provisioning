@@ -5,11 +5,11 @@
 
   vars:
     region: "us-west-2"
-    ami_id: "ami-0cc96c4cd98401dae"        # Example AMI ID (Ubuntu 20.04 LTS)
+    ami_id: "ami-0cc96c4cd98401dae"
     instance_type: "t3.micro"
-    key_name: "Pushpender"                  # Replace with your actual SSH key pair name
+    key_name: "Pushpender"
     security_group_name: "my-sg1"
-    subnet_id: "subnet-091d3132bcf1a71a0"  # Replace with your subnet ID
+    subnet_id: "subnet-091d3132bcf1a71a0"
 
   tasks:
     - name: Create a security group
@@ -21,13 +21,13 @@
           - proto: tcp
             from_port: 22
             to_port: 22
-            cidr_ip: "0.0.0.0/0"   # SSH access
+            cidr_ip: "0.0.0.0/0"
         state: present
       register: sg
 
     - name: Create an EC2 instance
       amazon.aws.ec2_instance:
-        name: "Sharma ji "
+        name: "jenkins-ansible-demo"
         image_id: "{{ ami_id }}"
         instance_type: "{{ instance_type }}"
         key_name: "{{ key_name }}"
@@ -38,3 +38,7 @@
         count: 1
         wait: yes
       register: ec2_instance
+
+    - name: Show created instance
+      ansible.builtin.debug:
+        msg: "Instance {{ ec2_instance.instances[0].instance_id }} is {{ ec2_instance.instances[0].state.name }}"

@@ -1,18 +1,18 @@
-// Jenkins Pipeline (Pipeline script) used in job "Aws-project"
+// Jenkins Pipeline: job "Aws-project" (Pipeline script from SCM)
 node {
-    stage ('Github connect') {
-        git branch: 'main', url: 'https://github.com/PushpenderKumar7505/2pm-wd-project.git'
+    def ANSIBLE_HOST = 'ubuntu@172.31.35.92'   // Ansible server private IP
+
+    stage('Github connect') {
+        checkout scm
     }
-    stage ('ansible-server') {
+    stage('ansible-server') {
         sshagent(['ansible']) {
-            sh 'ssh -o StrictHostKeyChecking=no ubuntu@172.31.35.92'
-            sh 'scp /var/lib/jenkins/workspace/Aws-project/* ubuntu@172.31.35.92:/home/ubuntu'
+            sh "scp -o StrictHostKeyChecking=no ec2.yml ${ANSIBLE_HOST}:/home/ubuntu/"
         }
     }
-    stage ('ansible deploy') {
+    stage('ansible deploy') {
         sshagent(['ansible']) {
-            sh 'ssh -o StrictHostKeyChecking=no ubuntu@172.31.35.92 cd /home/ubuntu'
-            sh 'ssh -o StrictHostKeyChecking=no ubuntu@172.31.35.92 ansible-playbook ec2.yml'
+            sh "ssh -o StrictHostKeyChecking=no ${ANSIBLE_HOST} 'cd /home/ubuntu && ansible-playbook ec2.yml'"
         }
     }
 }
